@@ -1,0 +1,13 @@
+# Python
+__pycache__/
+*.pyc
+.env
+
+# Node
+node_modules/
+frontend/node_modules/
+frontend/build/
+
+# Docker
+Dockerfile
+docker-compose.yml
