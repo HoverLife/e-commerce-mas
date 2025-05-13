@@ -1,34 +1,84 @@
-from typing import List, Dict
+# tools/tools.py
+
+import json
 from langchain_core.tools import tool
 
 @tool
-def search_items(preferences: List[str], items: List[Dict]) -> List[int]:
+async def buyer_agent(prompt: str) -> str:
     """
-    Возвращает ID товаров, соответствующих предпочтениям.
+    Агент-покупатель.
+    
+    Args:
+        prompt: Текст, описывающий текущее предложение или рекомендации.
+    Returns:
+        Ответ от BuyerAgent на основе входного prompt.
     """
-    return [item['id'] for item in items if item['category'] in preferences]
+    return f"BuyerAgent получил: «{prompt}»."
 
 @tool
-def get_item_details(item_id: int, items: List[Dict]) -> Dict:
+async def marketplace_agent(prompt: str) -> str:
     """
-    Получить детали товара (price, category).
+    Агент-рынок.
+    
+    Args:
+        prompt: Запрос покупателя или контекст (например, предпочтения).
+    Returns:
+        Ответ MarketplaceAgent с перечнем подходящих товаров.
     """
-    for it in items:
-        if it['id'] == item_id:
-            return it
-    return {}
+    return f"MarketplaceAgent обработал: «{prompt}»."
 
 @tool
-def cross_sell(item_id: int) -> List[int]:
+async def item_agent(prompt: str) -> str:
     """
-    Рекомендует ID дополнительных товаров.
+    Агент-товар.
+    
+    Args:
+        prompt: ID или имя товара.
+    Returns:
+        Детали выбранного товара.
     """
-    # stub: +1, +2 модифицированные
-    return [item_id + 1, item_id + 2]
+    return f"ItemAgent детали для: «{prompt}»."
 
 @tool
-def negotiate_price(item_id: int, current_price: float) -> float:
+async def cross_sell_agent(prompt: str) -> str:
     """
-    Предлагает новую цену (скидка 10%).
+    Агент кросс-продажи.
+    
+    Args:
+        prompt: ID или имя основного товара.
+    Returns:
+        Предложение сопутствующих товаров.
     """
-    return round(current_price * 0.9, 2)
+    return f"CrossSellAgent рекомендует для «{prompt}» дополнительные товары."
+
+@tool
+async def price_negotiation_agent(prompt: str) -> str:
+    """
+    Агент переговоров по цене.
+    
+    Args:
+        prompt: Информация о цене или запрос о скидке.
+    Returns:
+        Итоговое предложение по цене.
+    """
+    return f"PriceNegotiationAgent обсудил цену по «{prompt}»."
+
+@tool
+async def get_dialogue_history(history_id: str) -> str:
+    """
+    Инструмент: загрузить историю диалога по идентификатору.
+    
+    Читает файл `dialogues/history_{history_id}.json`.
+
+    Args:
+        history_id: Метка времени или имя файла с историей.
+    Returns:
+        Содержимое файла истории или сообщение об ошибке.
+    """
+    filepath = f"dialogues/history_{history_id}.json"
+    try:
+        async with open(filepath, 'r', encoding='utf-8') as f:
+            data = await f.read()
+        return f"История (ID={history_id}):\n{data}"
+    except FileNotFoundError:
+        return f"История с ID={history_id} не найдена."

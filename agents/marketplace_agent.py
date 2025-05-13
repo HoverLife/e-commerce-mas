@@ -1,8 +1,7 @@
 from langchain_core.tools import tool
-from configuration.configuration import Configuration
+from config.configuration import Configuration
 import mysql.connector
 from typing import List, Dict
-
 
 @tool
 def marketplace_agent(preferences: List[str]) -> List[Dict]:
@@ -19,18 +18,27 @@ def marketplace_agent(preferences: List[str]) -> List[Dict]:
             database=cfg.db_name,
         )
         cursor = conn.cursor()
-        cursor.execute("SELECT id, name, category, price FROM products_INFORMATION;")
+        cursor.execute("SELECT name, category, price FROM products_INFORMATION;")
         rows = cursor.fetchall()
         cursor.close()
         conn.close()
         items = [
-            { 'id': r[0], 'name': r[1], 'category': r[2], 'price': float(r[3]) }
+            {'name': r[1], 'category': r[2], 'price': float(r[3]) }
             for r in rows
         ]
     except Exception:
         # фолбек
         items = [
-            { 'id': 1, 'name': 'Wireless Mouse', 'category': 'electronics', 'price': 25.99 },
+            {'name': 'Wireless Mouse', 'category': 'electronics', 'price': 25.99 },
+            {'name': 'Wireless Mouse', 'category': 'electronics', 'price': 25.99 },
+            {'name': 'Wireless Mouse', 'category': 'electronics', 'price': 25.99 },
+            {'name': 'Wireless Mouse', 'category': 'electronics', 'price': 25.99 },
+            {'name': 'Wireless Mouse', 'category': 'electronics', 'price': 25.99 },
+            {'name': 'Wireless Mouse', 'category': 'electronics', 'price': 25.99 },
+            {'name': 'Wireless Mouse', 'category': 'electronics', 'price': 25.99 },
+            {'name': 'Wireless Mouse', 'category': 'electronics', 'price': 25.99 },
+            {'name': 'Wireless Mouse', 'category': 'electronics', 'price': 25.99 },
+            {'name': 'Wireless Mouse', 'category': 'electronics', 'price': 25.99 }
             # ... другие
         ]
     # фильтруем по категориям

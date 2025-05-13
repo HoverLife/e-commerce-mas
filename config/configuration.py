@@ -1,17 +1,24 @@
-import os
-from pydantic import BaseSettings
+from pydantic_settings import BaseSettings
 
 class Configuration(BaseSettings):
-    gigi_auth_header: str = os.getenv("GIGA_AUTH_HEADER")
-    giga_client_id: str = os.getenv("GIGA_CLIENT_ID")
-    giga_client_secret: str = os.getenv("GIGA_CLIENT_SECRET")
-    giga_scope: str = os.getenv("GIGA_SCOPE")
+    """
+    Читает настройки из .env: креденшалы GigaChat, URL-ы и БД.
+    """
+    GIGA_AUTH_HEADER: str
+    GIGA_CLIENT_ID: str
+    GIGA_CLIENT_SECRET: str
+    GIGA_SCOPE: str = "GIGACHAT_API_PERS"
 
-    db_host: str = os.getenv("DB_HOST")
-    db_port: int = int(os.getenv("DB_PORT", 3306))
-    db_user: str = os.getenv("DB_USER")
-    db_password: str = os.getenv("DB_PASSWORD")
-    db_name: str = os.getenv("DB_NAME")
+    GIGACHAT_AUTH_URL: str = "https://ngw.devices.sberbank.ru:9443/api/v2/oauth"
+    GIGACHAT_API_URL: str = "https://gigachat.devices.sberbank.ru/api/v1/models"
+    GIGA_MODEL: str = "GigaChat"
+
+    DB_HOST: str
+    DB_PORT: int = 5432
+    DB_USER: str
+    DB_PASSWORD: str
+    DB_NAME: str
 
     class Config:
         env_file = ".env"
+        env_file_encoding = "utf-8"

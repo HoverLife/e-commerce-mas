@@ -1,42 +1,55 @@
+import json
+import uuid
 from langgraph.graph import StateGraph, START, END
 from langgraph.prebuilt import ToolNode
+from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from state.state import MessagesState
-from configuration.configuration import Configuration
-from tools.tools import search_items, get_item_details, cross_sell, negotiate_price
-from agents.buyer_agent import buyer_agent
-from agents.item_agent import item_agent
-from agents.marketplace_agent import marketplace_agent
-from agents.cross_sell_agent import cross_sell_agent
-from agents.price_negotiation_agent import price_negotiation_agent
-from langchain.chat_models import init_chat_model
-from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
-
-# Создаём модель GigaChat
-cfg = Configuration()
-model = init_chat_model(
-    model="GigaChat",
-    credentials=cfg.gigi_auth_header,
-    scope=cfg.giga_scope,
-    verify_ssl_certs=False,
-).bind_tools([
-    search_items,
-    get_item_details,
-    cross_sell,
-    negotiate_price,
+from tools.tools import (
     buyer_agent,
-    item_agent,
     marketplace_agent,
+    item_agent,
     cross_sell_agent,
     price_negotiation_agent,
-])
+    get_dialogue_history,
+)
+from utils.gigachat import GigaChatClient
 
-# Строим граф
-builder = StateGraph(MessagesState)
-builder.add_node("react", lambda state: model.ainvoke([{"role":"user","content":state['user_query']}]))
-builder.add_node("tools", ToolNode(model.tools))
-builder.add_edge(START, "react")
-builder.add_edge("react", "tools")
-builder.add_edge("tools", "react")
-# можно настроить условие завершения, когда модель возвращает финальное сообщение без вызовов
+def build_chat_graph() -> StateGraph:
+    client = GigaChatClient()
+    tools = [
+        buyer_agent,
+        marketplace_agent,
+        item_agent,
+        cross_sell_agent,
+        price_negotiation_agent,
+        get_dialogue_history,
+    ]
+    tool_node = ToolNode(tools)
 
-graph = builder.compile()
+    async def call_model(state: MessagesState) -> dict:
+        # Преобразуем BaseMessage в dict API
+        api_msgs = []
+        for m in state["messages"]:
+            api_msgs.append({"role": m.role, "content": m.content})
+        js = await client.chat(api_msgs)
+        choice = js["choices"][0]["message"]
+        content = choice.get("content", "")
+        fc = choice.get("function_call")
+        if fc:
+            name = fc["name"]
+            args = json.loads(fc.get("arguments", "{}"))
+            tc = {"id": str(uuid.uuid4()), "name": name, "args": args}
+            return {"messages": [AIMessage("", tool_calls=[tc])]}
+        return {"messages": [AIMessage(content)]}
+
+    graph = StateGraph(MessagesState)
+    graph.add_node("model", call_model)
+    graph.add_node("action", tool_node)
+    graph.add_edge(START, "model")
+    graph.add_conditional_edges(
+        "model",
+        lambda s: "action" if isinstance(s["messages"][-1], AIMessage) and getattr(s["messages"][-1], "tool_calls", None) else END,
+        {"action": "action", END: END}
+    )
+    graph.add_edge("action", "model")
+    return graph.compile()
