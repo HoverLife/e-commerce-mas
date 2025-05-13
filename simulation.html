@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head><meta charset="UTF-8"><title>MAS Simulate</title></head>
+<body>
+  <input id="cats" placeholder="categories">
+  <button onclick="run()">Simulate</button>
+  <pre id="out"></pre>
+  <script>
+    async function run(){
+      const cats = document.getElementById('cats').value.split(' ');
+      const res = await fetch('/simulate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(cats)});
+      document.getElementById('out').textContent = JSON.stringify(await res.json(),null,2);
+    }
+  </script>
+</body>
+</html>

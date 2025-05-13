@@ -1,27 +1,37 @@
-import logging
-from langchain.tools import tool
-from langgraph.types import Command
-from tools import search_items, get_item_details
+from langchain_core.tools import tool
+from configuration.configuration import Configuration
+import mysql.connector
+from typing import List, Dict
 
-logger = logging.getLogger(__name__)
 
-async def MarketplaceAgent(state: dict) -> Command:
+@tool
+def marketplace_agent(preferences: List[str]) -> List[Dict]:
     """
-    Агент-маркетплейс: осуществляет поиск товаров по запросу покупателя.
-    Использует инструмент search_items.
+    Из БД или фолбека возвращает все товары по предпочтениям.
     """
-    buyer_input = state.get("buyer_input", "")
-    logger.info(f"[MarketplaceAgent] Выполняем поиск товаров для запроса: {buyer_input}")
-    # Поиск товаров по запросу
-    items = search_items(buyer_input)
-    # Возможно, обновляем состояние деталями первого товара
-    if items:
-        first_item = items[0]
-        details = get_item_details(first_item["id"])
-        # Сохраняем цену или другие характеристики при необходимости
-        state.setdefault("item_details", {})[first_item["id"]] = details
-        logger.info(f"[MarketplaceAgent] Получены детали для товара {first_item['id']}: {details}")
-    else:
-        logger.info("[MarketplaceAgent] Товары не найдены.")
-    # Переходим к Agent выбора товара
-    return Command(goto="ItemAgent", update={"items": items})
+    cfg = Configuration()
+    try:
+        conn = mysql.connector.connect(
+            host=cfg.db_host,
+            port=cfg.db_port,
+            user=cfg.db_user,
+            password=cfg.db_password,
+            database=cfg.db_name,
+        )
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, name, category, price FROM products_INFORMATION;")
+        rows = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        items = [
+            { 'id': r[0], 'name': r[1], 'category': r[2], 'price': float(r[3]) }
+            for r in rows
+        ]
+    except Exception:
+        # фолбек
+        items = [
+            { 'id': 1, 'name': 'Wireless Mouse', 'category': 'electronics', 'price': 25.99 },
+            # ... другие
+        ]
+    # фильтруем по категориям
+    return [it for it in items if it['category'] in preferences]

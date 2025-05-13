@@ -1,13 +1,12 @@
-import logging
-from langgraph.types import Command
+from langchain_core.tools import tool
+from langchain_core.messages import HumanMessage
+from typing import List, Dict
 
-logger = logging.getLogger(__name__)
-
-async def BuyerAgent(state: dict) -> Command:
+@tool
+def buyer_agent(preferences: List[str], items: List[Dict]) -> int:
     """
-    Агент-покупатель: получает запрос покупателя и передаёт управление на маркетплейс.
+    Выбирает первый товар из рекомендаций.
     """
-    buyer_input = state.get("buyer_input", "")
-    logger.info(f"[BuyerAgent] Инициализация запроса покупателя: {buyer_input}")
-    # Переходим к MarketplaceAgent для обработки запроса
-    return Command(goto="MarketplaceAgent")
+    if items:
+        return items[0]['id']
+    return -1
