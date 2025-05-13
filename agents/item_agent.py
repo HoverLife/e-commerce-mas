@@ -1,12 +1,10 @@
-from langchain_core.tools import tool
-from typing import Dict, List
+from typing import Dict, List, Any
 
-@tool
-def item_agent(item_id: int, items: List[Dict]) -> Dict:
+async def item_agent(item_id: int, items: List[Dict]) -> Dict[str, Any]:
     """
-    Возвращает детали выбранного товара.
+    Ищет в списке items элемент по id (index).
     """
     for it in items:
-        if it['id'] == item_id:
+        if it.get("id") == item_id:
             return it
     return {}

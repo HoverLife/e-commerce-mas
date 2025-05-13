@@ -1,12 +1,21 @@
-import asyncio
+import asyncio, uuid
 from graph.graph import build_chat_graph
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 
 async def run_cli():
-    msg = input("Введите сообщение пользователю: ")
     graph = build_chat_graph()
-    state = await graph.ainvoke({"messages": [], "user_query": msg, "current_item": None, "recommended_items": [], "final_price": 0.0})
+    session_id = uuid.uuid4().hex
+    print("Введите ваш запрос:")
+    msg = input("> ")
+    state = await graph.ainvoke({
+        "messages": [SystemMessage("Доступны инструменты агентам."), HumanMessage(msg)],
+        "session_id": session_id,
+        "current_item": None,
+        "recommended_items": [],
+        "final_price": 0.0
+    })
     for m in state["messages"]:
-        print(f"{m.role}: {m.content}")
+        print(f"[{m.role}] {m.content}")
 
 if __name__ == "__main__":
     asyncio.run(run_cli())

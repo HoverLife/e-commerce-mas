@@ -1,27 +1,26 @@
+version: "3.9"
 services:
   app:
     build: .
     env_file: .env
+    environment:
+      DB_HOST: db         # <-- здесь явно говорим, что база лежит на сервисе db
     ports:
       - "8000:8000"
-
-  prometheus:
-    image: prom/prometheus:latest
-    volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-    ports:
-      - "9090:9090"
     depends_on:
-      - app
-
-  grafana:
-    image: grafana/grafana:latest
-    # Монтируем provisioning для Datasource и provider
-    volumes:
-      - ./grafana/provisioning:/etc/grafana/provisioning:ro
-      # Монтируем сам каталог дашбордов
-      - ./grafana/provisioning/dashboards/dashboards:/var/lib/grafana/dashboards:ro
+      - db
+  db:
+    image: postgres:15
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
     ports:
-      - "3001:3000"
-    depends_on:
-      - prometheus
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/initdb:/docker-entrypoint-initdb.d   # ← монтируем init скрипты
+
+volumes:
+  pgdata:

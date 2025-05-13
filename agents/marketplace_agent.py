@@ -1,45 +1,54 @@
-from langchain_core.tools import tool
-from config.configuration import Configuration
-import mysql.connector
-from typing import List, Dict
+# agents/marketplace_agent.py
 
-@tool
-def marketplace_agent(preferences: List[str]) -> List[Dict]:
-    """
-    Из БД или фолбека возвращает все товары по предпочтениям.
-    """
-    cfg = Configuration()
-    try:
-        conn = mysql.connector.connect(
-            host=cfg.db_host,
-            port=cfg.db_port,
-            user=cfg.db_user,
-            password=cfg.db_password,
-            database=cfg.db_name,
+import asyncpg
+from typing import List, Dict, Optional
+from config.configuration import Settings
+
+_pool: Optional[asyncpg.Pool] = None
+
+async def get_pool() -> asyncpg.Pool:
+    global _pool
+    if _pool is None:
+        cfg = Settings()
+        _pool = await asyncpg.create_pool(
+            host=cfg.DB_HOST,
+            port=cfg.DB_PORT,
+            user=cfg.DB_USER,
+            password=cfg.DB_PASSWORD,
+            database=cfg.DB_NAME,
+            min_size=1,
+            max_size=10
         )
-        cursor = conn.cursor()
-        cursor.execute("SELECT name, category, price FROM products_INFORMATION;")
-        rows = cursor.fetchall()
-        cursor.close()
-        conn.close()
-        items = [
-            {'name': r[1], 'category': r[2], 'price': float(r[3]) }
-            for r in rows
-        ]
-    except Exception:
-        # фолбек
-        items = [
-            {'name': 'Wireless Mouse', 'category': 'electronics', 'price': 25.99 },
-            {'name': 'Wireless Mouse', 'category': 'electronics', 'price': 25.99 },
-            {'name': 'Wireless Mouse', 'category': 'electronics', 'price': 25.99 },
-            {'name': 'Wireless Mouse', 'category': 'electronics', 'price': 25.99 },
-            {'name': 'Wireless Mouse', 'category': 'electronics', 'price': 25.99 },
-            {'name': 'Wireless Mouse', 'category': 'electronics', 'price': 25.99 },
-            {'name': 'Wireless Mouse', 'category': 'electronics', 'price': 25.99 },
-            {'name': 'Wireless Mouse', 'category': 'electronics', 'price': 25.99 },
-            {'name': 'Wireless Mouse', 'category': 'electronics', 'price': 25.99 },
-            {'name': 'Wireless Mouse', 'category': 'electronics', 'price': 25.99 }
-            # ... другие
-        ]
-    # фильтруем по категориям
-    return [it for it in items if it['category'] in preferences]
+    return _pool
+
+async def marketplace_agent(
+    preferences: List[str],
+    limit: int = 0
+) -> List[Dict]:
+    """
+    Возвращает товары по категориям (name, category, price).
+    Генерирует локальный `id` = порядковый номер записи в результате.
+    Если `limit` > 0 — отберёт топ‑N самых дешёвых.
+    """
+    pool = await get_pool()
+
+    sql = """
+        SELECT name, category, price
+          FROM products
+         WHERE category = ANY($1::text[])
+    """
+    if limit and limit > 0:
+        sql += " ORDER BY price ASC LIMIT $2"
+        rows = await pool.fetch(sql, preferences, limit)
+    else:
+        rows = await pool.fetch(sql, preferences)
+
+    result = []
+    for idx, r in enumerate(rows, start=1):
+        result.append({
+            "id":       idx,
+            "name":     r["name"],
+            "category": r["category"],
+            "price":    float(r["price"]),
+        })
+    return result

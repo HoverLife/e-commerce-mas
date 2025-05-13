@@ -1,84 +1,51 @@
 # tools/tools.py
-
+import aiofiles
 import json
+import uuid
+from typing import List, Dict
 from langchain_core.tools import tool
 
-@tool
-async def buyer_agent(prompt: str) -> str:
-    """
-    Агент-покупатель.
-    
-    Args:
-        prompt: Текст, описывающий текущее предложение или рекомендации.
-    Returns:
-        Ответ от BuyerAgent на основе входного prompt.
-    """
-    return f"BuyerAgent получил: «{prompt}»."
 
 @tool
-async def marketplace_agent(prompt: str) -> str:
-    """
-    Агент-рынок.
-    
-    Args:
-        prompt: Запрос покупателя или контекст (например, предпочтения).
-    Returns:
-        Ответ MarketplaceAgent с перечнем подходящих товаров.
-    """
-    return f"MarketplaceAgent обработал: «{prompt}»."
+async def buyer_agent_tool(preferences: List[str], items: List[Dict]) -> int:
+    """Tool-обёртка для buyer_agent."""
+    from agents.buyer_agent import buyer_agent
+    return await buyer_agent(preferences, items)
+
 
 @tool
-async def item_agent(prompt: str) -> str:
-    """
-    Агент-товар.
-    
-    Args:
-        prompt: ID или имя товара.
-    Returns:
-        Детали выбранного товара.
-    """
-    return f"ItemAgent детали для: «{prompt}»."
+async def marketplace_agent_tool(preferences: List[str]) -> List[Dict]:
+    """Tool-обёртка для marketplace_agent."""
+    from agents.marketplace_agent import marketplace_agent
+    return await marketplace_agent(preferences)
 
 @tool
-async def cross_sell_agent(prompt: str) -> str:
-    """
-    Агент кросс-продажи.
-    
-    Args:
-        prompt: ID или имя основного товара.
-    Returns:
-        Предложение сопутствующих товаров.
-    """
-    return f"CrossSellAgent рекомендует для «{prompt}» дополнительные товары."
+async def item_agent_tool(item_id: int, items: List[Dict]) -> Dict:
+    """Tool-обёртка для item_agent."""
+    from agents.item_agent import item_agent
+    return await item_agent(item_id, items)
 
 @tool
-async def price_negotiation_agent(prompt: str) -> str:
-    """
-    Агент переговоров по цене.
-    
-    Args:
-        prompt: Информация о цене или запрос о скидке.
-    Returns:
-        Итоговое предложение по цене.
-    """
-    return f"PriceNegotiationAgent обсудил цену по «{prompt}»."
+async def cross_sell_agent_tool(item_id: int) -> List[int]:
+    """Tool-обёртка для cross_sell_agent."""
+    from agents.cross_sell_agent import cross_sell_agent
+    return await cross_sell_agent(item_id)
 
 @tool
-async def get_dialogue_history(history_id: str) -> str:
-    """
-    Инструмент: загрузить историю диалога по идентификатору.
-    
-    Читает файл `dialogues/history_{history_id}.json`.
+async def price_negotiation_agent_tool(item_id: int, current_price: float) -> float:
+    """Tool-обёртка для price_negotiation_agent."""
+    from agents.price_negotiation_agent import price_negotiation_agent
+    return await price_negotiation_agent(item_id, current_price)
 
-    Args:
-        history_id: Метка времени или имя файла с историей.
-    Returns:
-        Содержимое файла истории или сообщение об ошибке.
+@tool
+async def get_dialogue_history(session_id: str) -> str:
     """
-    filepath = f"dialogues/history_{history_id}.json"
+    Загружает JSON истории диалога по session_id.
+    """
+    path = f"dialogues/session_{session_id}.json"
     try:
-        async with open(filepath, 'r', encoding='utf-8') as f:
+        async with aiofiles.open(path, 'r', encoding='utf-8') as f:
             data = await f.read()
-        return f"История (ID={history_id}):\n{data}"
+        return data
     except FileNotFoundError:
-        return f"История с ID={history_id} не найдена."
+        return "{}"

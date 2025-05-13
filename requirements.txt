@@ -2,6 +2,7 @@ fastapi
 uvicorn
 langchain-core
 langchain-gigachat
+langchain-community
 langgraph
 pydantic
 python-dotenv
@@ -9,4 +10,6 @@ pytest
 pytest-asyncio
 langchain
 mysql-connector
-pydantic_settings
+pydantic-settings
+asyncpg
+aiofiles
