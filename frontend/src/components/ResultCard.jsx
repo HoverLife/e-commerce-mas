@@ -1,11 +1,9 @@
 import React from 'react';
 
-function ResultCard({ item }) {
+function ResultCard({ sender, text }) {
   return (
     <div className="result-card">
-      <h3>{item.name}</h3>
-      <p>Категория: {item.category}</p>
-      <p>Цена: ${item.price}</p>
+      <strong>{sender}:</strong> {text}
     </div>
   );
 }

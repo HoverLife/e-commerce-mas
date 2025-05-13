@@ -1,14 +1,13 @@
-class BuyerAgent:
-    """
-    Агент-покупатель с предпочтениями и выбором товаров.
-    """
-    def __init__(self, preferences):
-        self.preferences = preferences
+import logging
+from langgraph.types import Command
 
-    def choose_item(self, recommendations):
-        """
-        Выбирает первый товар из списка рекомендаций.
-        """
-        if recommendations:
-            return recommendations[0]
-        return None
+logger = logging.getLogger(__name__)
+
+async def BuyerAgent(state: dict) -> Command:
+    """
+    Агент-покупатель: получает запрос покупателя и передаёт управление на маркетплейс.
+    """
+    buyer_input = state.get("buyer_input", "")
+    logger.info(f"[BuyerAgent] Инициализация запроса покупателя: {buyer_input}")
+    # Переходим к MarketplaceAgent для обработки запроса
+    return Command(goto="MarketplaceAgent")

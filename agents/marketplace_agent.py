@@ -1,23 +1,27 @@
-# agents/marketplace_agent.py
-from giga_integration.negotiation_protocol import get_recommendations
+import logging
+from langchain.tools import tool
+from langgraph.types import Command
+from tools import search_items, get_item_details
 
-class MarketplaceAgent:
-    """
-    Агент-рынок: хранит список товаров и генерирует рекомендации для покупателя.
-    """
-    def __init__(self, items):
-        self.items = items
+logger = logging.getLogger(__name__)
 
-    def recommend(self, buyer_agent):
-        preferences = buyer_agent.preferences
-        try:
-            rec_ids = get_recommendations(preferences, self.items)
-        except Exception:
-            rec_ids = []
-        rec_items = []
-        for rec_id in rec_ids:
-            for item in self.items:
-                if item.id == rec_id:
-                    rec_items.append(item)
-                    break
-        return rec_items
+async def MarketplaceAgent(state: dict) -> Command:
+    """
+    Агент-маркетплейс: осуществляет поиск товаров по запросу покупателя.
+    Использует инструмент search_items.
+    """
+    buyer_input = state.get("buyer_input", "")
+    logger.info(f"[MarketplaceAgent] Выполняем поиск товаров для запроса: {buyer_input}")
+    # Поиск товаров по запросу
+    items = search_items(buyer_input)
+    # Возможно, обновляем состояние деталями первого товара
+    if items:
+        first_item = items[0]
+        details = get_item_details(first_item["id"])
+        # Сохраняем цену или другие характеристики при необходимости
+        state.setdefault("item_details", {})[first_item["id"]] = details
+        logger.info(f"[MarketplaceAgent] Получены детали для товара {first_item['id']}: {details}")
+    else:
+        logger.info("[MarketplaceAgent] Товары не найдены.")
+    # Переходим к Agent выбора товара
+    return Command(goto="ItemAgent", update={"items": items})

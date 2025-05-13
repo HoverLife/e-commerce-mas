@@ -9,3 +9,12 @@ aiofiles
 jinja2
 python-multipart
 prometheus-client
+langchain
+langchain-core
+langchain-gigachat
+langgraph
+fastapi
+uvicorn
+pytest
+pytest-asyncio
+typing-extensions

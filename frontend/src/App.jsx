@@ -1,34 +1,24 @@
 import React, { useState } from 'react';
-import axios from 'axios';
-import ResultCard from './components/ResultCard';
+import ResultCard from './ResultCard';
 
 function App() {
-  const [recommendations, setRecommendations] = useState([]);
-  const [ctr, setCtr] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [agreement, setAgreement] = useState(false);
 
-  const fetchRecommendations = () => {
-    axios.get('/simulate?count=1')
-      .then(response => {
-        setRecommendations(response.data.recommendations);
-        setCtr(response.data.ctr);
-      })
-      .catch(error => {
-        console.error('Error fetching recommendations:', error);
-      });
+  const handleSimulate = async () => {
+    const response = await fetch('/simulate', { method: 'POST' });
+    const data = await response.json();
+    setMessages(data.messages);
+    setAgreement(data.agreement);
   };
 
   return (
     <div className="App">
-      <h1>Рекомендации товаров</h1>
-      <button onClick={fetchRecommendations}>Получить рекомендации</button>
-      {ctr !== null && (
-        <p>CTR последней сессии: {(ctr * 100).toFixed(2)}%</p>
-      )}
-      <div className="results">
-        {recommendations.map(item => (
-          <ResultCard key={item.id} item={item} />
-        ))}
-      </div>
+      <button onClick={handleSimulate}>Simulate Negotiation</button>
+      {messages.map((msg, index) => (
+        <ResultCard key={index} sender={msg.sender} text={msg.text} />
+      ))}
+      {agreement && <div>Agreement reached!</div>}
     </div>
   );
 }
