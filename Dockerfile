@@ -1,20 +1,21 @@
-# Dockerfile
-
 FROM python:3.11-slim
 
-# Устанавливаем рабочую директорию
+# Установим системные зависимости
+RUN apt-get update \
+    && apt-get install -y gcc libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
-# Копируем список зависимостей и устанавливаем их
+# Копируем зависимости и устанавливаем их
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Копируем весь проект
+# Копируем весь код проекта
 COPY . .
 
-# Создаём папку для диалогов
+# Создаем директорию для хранения диалогов
 RUN mkdir -p dialogues
 
-# Открываем порт и запускаем Uvicorn
 EXPOSE 8000
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
