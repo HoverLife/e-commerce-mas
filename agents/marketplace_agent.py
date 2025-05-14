@@ -17,7 +17,7 @@ async def get_pool() -> asyncpg.Pool:
             password=cfg.DB_PASSWORD,
             database=cfg.DB_NAME,
             min_size=1,
-            max_size=10
+            max_size=30000
         )
     return _pool
 

@@ -1,67 +1,81 @@
-import os
-import json
+# main.py
+import re
 import uuid
-from datetime import datetime
+import json
 import logging
-import aiofiles
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
-from graph.graph import graph
-from state.state import ChatState
 
-# Настройка логирования
-logger = logging.getLogger("agent_actions")
+from agents.marketplace_agent import marketplace_agent
+from agents.buyer_agent import buyer_agent
+from agents.cross_sell_agent import cross_sell_agent
+from agents.item_agent import item_agent
+from agents.price_negotiation_agent import price_negotiation_agent
+
+# ─── Логирование ───────────────────────────────────────────
+logger = logging.getLogger("mas")
 logger.setLevel(logging.INFO)
-file_handler = logging.FileHandler("agent_actions.log", encoding="utf-8")
-file_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
-logger.addHandler(file_handler)
+fh = logging.FileHandler("agent_actions.log", encoding="utf-8")
+fh.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
+logger.addHandler(fh)
 
-os.makedirs("dialogues", exist_ok=True)
-app = FastAPI(title="MAS with GigaChat Function Calling")
+# ─── Приложение ────────────────────────────────────────────
+app = FastAPI(title="MAS Direct Orchestrator")
 
 class ChatRequest(BaseModel):
     message: str
 
 @app.post("/chat")
-async def chat_endpoint(req: ChatRequest):
+async def chat(req: ChatRequest):
+    # 1) Распарсить категорию
+    m = re.search(r"категори[яи]\s+([A-Za-z0-9_]+)", req.message, flags=re.IGNORECASE)
+    if not m:
+        raise HTTPException(400, detail="Неправильный формат: Покажи товары категории <имя>")
+    category = m.group(1).lower()
     session_id = uuid.uuid4().hex
-    system_msg = SystemMessage("Ниже идёт диалог. Отвечай через GigaChat, используй функцию fetch_products для БД.")
-    human_msg = HumanMessage(req.message)
 
+    logger.info(f"[{session_id}] Шаг 1: marketplace_agent({category})")
     try:
-        state: ChatState = await graph.ainvoke({
-            "messages": [system_msg, human_msg],
-            "session_id": session_id
-        })
+        products = await marketplace_agent([category])
     except Exception as e:
-        logger.exception(f"Graph invocation failed: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        logger.exception(f"[{session_id}] Ошибка на marketplace_agent")
+        raise HTTPException(500, detail="Ошибка доступа к базе данных")
 
-    # Сохраняем историю диалога
-    history = []
-    for idx, m in enumerate(state.messages):
-        if isinstance(m, SystemMessage): role = "system"
-        elif isinstance(m, HumanMessage): role = "user"
-        elif isinstance(m, AIMessage): role = "assistant"
-        else: role = "tool"
-        history.append({
-            "id": idx + 1,
-            "timestamp": datetime.utcnow().isoformat(),
-            "role": role,
-            "content": m.content
-        })
-    history_path = f"dialogues/session_{state.session_id}.json"
-    try:
-        async with aiofiles.open(history_path, "w", encoding="utf-8") as f:
-            await f.write(json.dumps(history, ensure_ascii=False, indent=2))
-    except Exception:
-        logger.exception("Failed to write dialogue history")
+    # 2) buyer_agent выбирает один товар
+    logger.info(f"[{session_id}] Шаг 2: buyer_agent, {len(products)} items")
+    chosen_id = await buyer_agent([category], products)
 
-    # Логируем действия
-    user_text = req.message
-    ai_text = next((m.content for m in reversed(state.messages) if isinstance(m, AIMessage)), "")
-    logger.info(f"[session:{state.session_id}] User: {user_text}")
-    logger.info(f"[session:{state.session_id}] Agent: {ai_text}")
+    # 3) cross_sell_agent предлагает доп. товары
+    logger.info(f"[{session_id}] Шаг 3: cross_sell_agent({chosen_id})")
+    rec_ids = await cross_sell_agent(chosen_id)
 
-    return {"session_id": state.session_id, "response": ai_text}
+    # 4) item_agent подгружает детали
+    logger.info(f"[{session_id}] Шаг 4: item_agent for {rec_ids}")
+    rec_items = []
+    for rid in rec_ids:
+        it = await item_agent(rid, products)
+        if it:
+            rec_items.append(it)
+
+    # 5) price_negotiation_agent снижает цену у первого рекомендованного
+    final_price = None
+    if rec_items:
+        logger.info(f"[{session_id}] Шаг 5: price_negotiation_agent on {rec_items[0]['id']}")
+        final_price = await price_negotiation_agent(
+            rec_items[0]["id"], rec_items[0]["price"]
+        )
+
+    # Сохранить историю
+    hist = {
+        "session_id": session_id,
+        "category": category,
+        "all_products": products,
+        "chosen_id": chosen_id,
+        "recommended": rec_items,
+        "final_price": final_price
+    }
+    with open(f"dialogues/session_{session_id}.json", "w", encoding="utf-8") as f:
+        json.dump(hist, f, ensure_ascii=False, indent=2)
+
+    # Итоговый ответ
+    return hist
