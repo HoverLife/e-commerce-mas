@@ -2,12 +2,14 @@
 from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
+    # PostgreSQL
     DB_HOST: str
     DB_PORT: int = 5432
     DB_USER: str
     DB_PASSWORD: str
     DB_NAME: str
 
+    # GigaChat
     GIGA_CLIENT_ID: str
     GIGA_CLIENT_SECRET: str
     GIGA_SCOPE: str = "GIGACHAT_API_PERS"

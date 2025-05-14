@@ -1,81 +1,60 @@
-# main.py
-import re
+import os
 import uuid
-import json
 import logging
+
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
-from agents.marketplace_agent import marketplace_agent
-from agents.buyer_agent import buyer_agent
-from agents.cross_sell_agent import cross_sell_agent
-from agents.item_agent import item_agent
-from agents.price_negotiation_agent import price_negotiation_agent
+from graph.graph import graph  # ваш LangGraph
+from langchain_core.messages import AIMessage
 
-# ─── Логирование ───────────────────────────────────────────
-logger = logging.getLogger("mas")
+# ─── Логирование ────────────────────────────────
+logger = logging.getLogger("mas_app")
 logger.setLevel(logging.INFO)
 fh = logging.FileHandler("agent_actions.log", encoding="utf-8")
-fh.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
+fh.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
 logger.addHandler(fh)
 
-# ─── Приложение ────────────────────────────────────────────
-app = FastAPI(title="MAS Direct Orchestrator")
+app = FastAPI(title="MAS Orchestrator with LangGraph")
 
 class ChatRequest(BaseModel):
     message: str
 
 @app.post("/chat")
 async def chat(req: ChatRequest):
-    # 1) Распарсить категорию
-    m = re.search(r"категори[яи]\s+([A-Za-z0-9_]+)", req.message, flags=re.IGNORECASE)
-    if not m:
-        raise HTTPException(400, detail="Неправильный формат: Покажи товары категории <имя>")
-    category = m.group(1).lower()
     session_id = uuid.uuid4().hex
+    user_text = req.message.strip()
+    logger.info(f"[{session_id}] User: {user_text}")
 
-    logger.info(f"[{session_id}] Шаг 1: marketplace_agent({category})")
-    try:
-        products = await marketplace_agent([category])
-    except Exception as e:
-        logger.exception(f"[{session_id}] Ошибка на marketplace_agent")
-        raise HTTPException(500, detail="Ошибка доступа к базе данных")
-
-    # 2) buyer_agent выбирает один товар
-    logger.info(f"[{session_id}] Шаг 2: buyer_agent, {len(products)} items")
-    chosen_id = await buyer_agent([category], products)
-
-    # 3) cross_sell_agent предлагает доп. товары
-    logger.info(f"[{session_id}] Шаг 3: cross_sell_agent({chosen_id})")
-    rec_ids = await cross_sell_agent(chosen_id)
-
-    # 4) item_agent подгружает детали
-    logger.info(f"[{session_id}] Шаг 4: item_agent for {rec_ids}")
-    rec_items = []
-    for rid in rec_ids:
-        it = await item_agent(rid, products)
-        if it:
-            rec_items.append(it)
-
-    # 5) price_negotiation_agent снижает цену у первого рекомендованного
-    final_price = None
-    if rec_items:
-        logger.info(f"[{session_id}] Шаг 5: price_negotiation_agent on {rec_items[0]['id']}")
-        final_price = await price_negotiation_agent(
-            rec_items[0]["id"], rec_items[0]["price"]
-        )
-
-    # Сохранить историю
-    hist = {
-        "session_id": session_id,
-        "category": category,
-        "all_products": products,
-        "chosen_id": chosen_id,
-        "recommended": rec_items,
-        "final_price": final_price
+    # 1) Подготовка входа для графа
+    system_msg = {
+        "role": "system",
+        "content": "Ты — ассистент с функцией fetch_products(category, limit) для работы с БД."
     }
-    with open(f"dialogues/session_{session_id}.json", "w", encoding="utf-8") as f:
-        json.dump(hist, f, ensure_ascii=False, indent=2)
+    user_msg = {"role": "user", "content": user_text}
 
-    # Итоговый ответ
-    return hist
+    try:
+        # 2) Асинхронный вызов графа
+        result = await graph.ainvoke({"messages": [system_msg, user_msg]})
+    except Exception as e:
+        logger.exception(f"[{session_id}] Graph error")
+        raise HTTPException(500, "Internal agent error")
+
+    # 3) Проверяем результат
+    if not isinstance(result, dict) or "messages" not in result:
+        logger.error(f"[{session_id}] Unexpected graph output: {result!r}")
+        raise HTTPException(500, "Unexpected agent output")
+
+    # 4) Извлекаем ответ от ассистента
+    reply = None
+    for m in reversed(result["messages"]):
+        if m.get("role") == "assistant" and "content" in m:
+            reply = m["content"]
+            break
+
+    if reply is None:
+        logger.error(f"[{session_id}] No assistant message in output")
+        raise HTTPException(500, "No response from agent")
+
+    logger.info(f"[{session_id}] Reply: {reply}")
+    return {"session_id": session_id, "response": reply}

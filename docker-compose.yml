@@ -7,16 +7,12 @@ services:
       - "8000:8000"
     env_file:
       - .env
-    # Если вы на Linux и host.docker.internal не резолвится,
-    # раскомментируйте следующую строку:
+    # Если на Linux host.docker.internal не работает, раскомментируйте:
     # extra_hosts:
     #   - "host.docker.internal:host-gateway"
-    # Убираем сервис db — приложение будет подключаться к вашей локальной БД
     depends_on: []
-    # Если останется db в depends_on, Docker попытается его поднять, но он нам не нужен.
 
-# Убираем раздел db полностью, чтобы не перезаписывать вашу боевую БД
-#services:
+# Сервис db закомментирован, чтобы не перезаписывать боевую БД
 #  db:
 #    image: postgres:15
 #    environment:
